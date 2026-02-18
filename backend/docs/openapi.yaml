@@ -1,0 +1,1253 @@
+openapi: 3.0.0
+
+info:
+  title: Smart Loss Control API
+  version: 1.0.2
+  description: |
+    Smart Loss Control Backend API (Web MVP).
+    Designed for FMCG cooking oil inventory reconciliation with offline-first sales logging,
+    carton-to-unit decanting, AI-driven spot checks, deviation alerts, and reporting.
+    
+    **Key Features:**
+    - Offline-first sales logging with IndexedDB sync
+    - AI-powered anomaly detection (variance >10% triggers alerts)
+    - QR-based staff onboarding with 4-digit PIN authentication
+    - Bulk-to-retail conversion (carton → 12 bottles)
+    - WhatsApp/SMS alert notifications
+    - Real-time deviation tracking with financial loss calculation
+
+servers:
+  - url: http://localhost:5000
+    description: Local Development Server
+
+tags:
+  - name: Auth
+    description: Owner/Staff authentication, onboarding, and device linking
+  - name: Shops
+    description: Shop setup and staff management
+  - name: SKUs
+    description: Cooking oil SKU catalog management
+  - name: Inventory
+    description: Restock, stock adjustments, and decant operations
+  - name: Sales
+    description: Offline sales synchronization
+  - name: Audit
+    description: AI-triggered spot checks, physical verification, and variance detection
+  - name: Alerts
+    description: Variance alerts and resolution tracking
+  - name: Notifications
+    description: WhatsApp/SMS notification delivery tracking
+  - name: Reports
+    description: Deviation reports and financial loss reporting
+  - name: Health
+    description: System health checks
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # -------------------------
+    # COMMON
+    # -------------------------
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Validation error"
+        errors:
+          type: array
+          items:
+            type: string
+          example:
+            - "phone is required"
+            - "pin must be 4 digits"
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 85
+
+    # -------------------------
+    # AUTH / USERS
+    # -------------------------
+    OwnerRegisterRequest:
+      type: object
+      required:
+        - full_name
+        - shop_name
+        - phone
+      properties:
+        full_name:
+          type: string
+          example: "Amina Yusuf"
+        shop_name:
+          type: string
+          example: "Amina Ventures"
+        phone:
+          type: string
+          example: "+2348012345678"
+
+    OTPVerifyRequest:
+      type: object
+      required:
+        - phone
+        - otp
+      properties:
+        phone:
+          type: string
+          example: "+2348012345678"
+        otp:
+          type: string
+          example: "1234"
+
+    StaffPinLoginRequest:
+      type: object
+      required:
+        - phone
+        - pin
+      properties:
+        phone:
+          type: string
+          example: "+2348012345678"
+        pin:
+          type: string
+          example: "1234"
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            role:
+              type: string
+              example: "OWNER"
+            phone:
+              type: string
+              example: "+2348012345678"
+            shop_id:
+              type: string
+              format: uuid
+
+    StaffLinkRequest:
+      type: object
+      required:
+        - qr_token
+        - device_id
+        - staff_name
+        - pin
+      properties:
+        qr_token:
+          type: string
+          example: "SHOPQR-92D8KASJ2"
+        device_id:
+          type: string
+          example: "android-device-xyz-123"
+        staff_name:
+          type: string
+          example: "Chinedu"
+        pin:
+          type: string
+          example: "4321"
+
+    StaffLinkResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Staff device linked successfully"
+        staff:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+              example: "Chinedu"
+            device_id:
+              type: string
+              example: "android-device-xyz-123"
+            role:
+              type: string
+              example: "STAFF"
+
+    # -------------------------
+    # SHOP
+    # -------------------------
+    Shop:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        shop_name:
+          type: string
+          example: "Amina Ventures"
+        owner_phone:
+          type: string
+          example: "+2348012345678"
+        created_at:
+          type: string
+          format: date-time
+
+    QRTokenResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        qr_token:
+          type: string
+          example: "SHOPQR-92D8KASJ2"
+        expires_in_minutes:
+          type: integer
+          example: 30
+
+    RevokeStaffAccessRequest:
+      type: object
+      required:
+        - staff_id
+      properties:
+        staff_id:
+          type: string
+          format: uuid
+
+    # -------------------------
+    # SKU
+    # -------------------------
+    SKU:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        brand:
+          type: string
+          example: "King's"
+        size:
+          type: string
+          example: "5L"
+        unit_type:
+          type: string
+          example: "BOTTLE"
+        barcode:
+          type: string
+          example: "SKU-KINGS-5L"
+        created_at:
+          type: string
+          format: date-time
+
+    # -------------------------
+    # INVENTORY
+    # -------------------------
+    InventoryItem:
+      type: object
+      properties:
+        sku_id:
+          type: string
+          format: uuid
+        brand:
+          type: string
+          example: "Mamador"
+        size:
+          type: string
+          example: "1L"
+        quantity:
+          type: integer
+          example: 98
+        cost_price:
+          type: number
+          example: 18500
+        sell_price:
+          type: number
+          example: 21000
+        updated_at:
+          type: string
+          format: date-time
+
+    RestockRequest:
+      type: object
+      required:
+        - sku_id
+        - ordered_qty
+        - received_qty
+        - cost_price
+        - sell_price
+      properties:
+        sku_id:
+          type: string
+          format: uuid
+        ordered_qty:
+          type: integer
+          example: 100
+        received_qty:
+          type: integer
+          example: 98
+        cost_price:
+          type: number
+          example: 18500
+        sell_price:
+          type: number
+          example: 21000
+        supplier_name:
+          type: string
+          example: "Lagos Distributors Ltd"
+        reference_note:
+          type: string
+          example: "Delivery truck #102"
+
+    RestockResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Restock recorded successfully"
+        discrepancy:
+          type: integer
+          example: -2
+        inventory_after:
+          type: integer
+          example: 98
+
+    DecantRequest:
+      type: object
+      required:
+        - from_sku_id
+        - to_sku_id
+        - cartons
+      properties:
+        from_sku_id:
+          type: string
+          format: uuid
+          description: SKU representing carton stock
+        to_sku_id:
+          type: string
+          format: uuid
+          description: SKU representing unit/bottle stock
+        cartons:
+          type: integer
+          example: 1
+        units_per_carton:
+          type: integer
+          example: 12
+
+    DecantResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Decant completed successfully"
+        cartons_removed:
+          type: integer
+          example: 1
+        units_added:
+          type: integer
+          example: 12
+
+    # -------------------------
+    # SALES
+    # -------------------------
+    SaleItem:
+      type: object
+      required:
+        - sale_id
+        - sku_id
+        - quantity
+        - sold_at
+      properties:
+        sale_id:
+          type: string
+          description: Client-generated UUID for idempotent sync
+          example: "sale-uuid-123"
+        sku_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          example: 3
+        unit_price:
+          type: number
+          example: 21000
+        sold_at:
+          type: string
+          format: date-time
+          example: "2026-02-16T08:10:00Z"
+
+    SalesSyncRequest:
+      type: object
+      required:
+        - device_id
+        - sales
+      properties:
+        device_id:
+          type: string
+          example: "android-device-xyz-123"
+        sales:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleItem"
+
+    SalesSyncResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Sales synced successfully"
+        accepted:
+          type: integer
+          example: 10
+        duplicates_ignored:
+          type: integer
+          example: 2
+
+    # -------------------------
+    # AUDIT
+    # -------------------------
+    TriggerCountResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        should_prompt:
+          type: boolean
+          example: true
+        sku_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          example: "TIME_BASED_TRIGGER"
+        message:
+          type: string
+          example: "Quick Check Required: Verify King's Oil 5L stock on shelf."
+
+    VerifyCountRequest:
+      type: object
+      required:
+        - sku_id
+        - actual_qty
+      properties:
+        sku_id:
+          type: string
+          format: uuid
+        actual_qty:
+          type: integer
+          example: 95
+        counted_at:
+          type: string
+          format: date-time
+          example: "2026-02-16T08:30:00Z"
+
+    VerifyCountResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        expected_qty:
+          type: integer
+          example: 97
+        actual_qty:
+          type: integer
+          example: 95
+        deviation:
+          type: integer
+          example: -2
+        deviation_percent:
+          type: number
+          example: -2.06
+        alert_triggered:
+          type: boolean
+          example: true
+        estimated_loss:
+          type: number
+          example: 42000
+
+    # -------------------------
+    # ALERTS
+    # -------------------------
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        shop_id:
+          type: string
+          format: uuid
+        sku_id:
+          type: string
+          format: uuid
+        expected_qty:
+          type: integer
+          example: 97
+        actual_qty:
+          type: integer
+          example: 95
+        deviation:
+          type: integer
+          example: -2
+        estimated_loss:
+          type: number
+          example: 42000
+        status:
+          type: string
+          example: "OPEN"
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ResolveAlertResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Alert resolved successfully"
+
+    # -------------------------
+    # NOTIFICATIONS
+    # -------------------------
+    NotificationLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        alert_id:
+          type: string
+          format: uuid
+        recipient_phone:
+          type: string
+          example: "+2348012345678"
+        channel:
+          type: string
+          enum: [WHATSAPP, SMS, PUSH]
+          example: "WHATSAPP"
+        message_body:
+          type: string
+          example: "🚨 Alert: Shop [Amina Ventures]. Missing: 3 units King's 5L. Est. Loss: ₦63,000."
+        status:
+          type: string
+          enum: [PENDING, SENT, FAILED, DELIVERED]
+          example: "DELIVERED"
+        sent_at:
+          type: string
+          format: date-time
+        delivered_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    SendNotificationRequest:
+      type: object
+      required:
+        - alert_id
+        - channel
+      properties:
+        alert_id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+          enum: [WHATSAPP, SMS, PUSH]
+          example: "WHATSAPP"
+        recipient_phone:
+          type: string
+          example: "+2348012345678"
+
+    # -------------------------
+    # REPORTS
+    # -------------------------
+    DeviationReportItem:
+      type: object
+      properties:
+        sku_id:
+          type: string
+          format: uuid
+        brand:
+          type: string
+          example: "King's"
+        size:
+          type: string
+          example: "5L"
+        expected_qty:
+          type: integer
+          example: 97
+        actual_qty:
+          type: integer
+          example: 95
+        deviation:
+          type: integer
+          example: -2
+        estimated_loss:
+          type: number
+          example: 42000
+        timestamp:
+          type: string
+          format: date-time
+
+    StaffPerformanceReport:
+      type: object
+      properties:
+        staff_id:
+          type: string
+          format: uuid
+        staff_name:
+          type: string
+          example: "Chinedu"
+        total_sales_logged:
+          type: integer
+          example: 245
+        total_counts_performed:
+          type: integer
+          example: 18
+        accuracy_rate:
+          type: number
+          example: 94.5
+        last_activity:
+          type: string
+          format: date-time
+
+    SalesVelocityReport:
+      type: object
+      properties:
+        sku_id:
+          type: string
+          format: uuid
+        brand:
+          type: string
+          example: "Mamador"
+        size:
+          type: string
+          example: "2L"
+        hourly_avg:
+          type: number
+          example: 12.5
+        daily_avg:
+          type: number
+          example: 98.3
+        weekly_avg:
+          type: number
+          example: 687.0
+        current_velocity:
+          type: number
+          example: 25.0
+        anomaly_detected:
+          type: boolean
+          example: true
+
+security:
+  - BearerAuth: []
+
+paths:
+  # -------------------------
+  # HEALTH
+  # -------------------------
+  /health:
+    get:
+      summary: API health check
+      tags: [Health]
+      responses:
+        "200":
+          description: Server is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  uptime_seconds:
+                    type: number
+                    example: 12450
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  # -------------------------
+  # AUTH
+  # -------------------------
+  /auth/register-owner:
+    post:
+      summary: Register shop owner (OTP request)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OwnerRegisterRequest"
+      responses:
+        "201":
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/verify-otp:
+    post:
+      summary: Verify OTP and activate owner account
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OTPVerifyRequest"
+      responses:
+        "200":
+          description: OTP verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login-pin:
+    post:
+      summary: Staff login via phone + 4-digit PIN
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffPinLoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/staff/link:
+    post:
+      summary: Link staff device using shop QR token
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffLinkRequest"
+      responses:
+        "201":
+          description: Staff linked successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffLinkResponse"
+        "400":
+          description: Invalid QR token or device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # -------------------------
+  # SHOPS
+  # -------------------------
+  /shops/me:
+    get:
+      summary: Fetch current shop profile (owner/staff)
+      tags: [Shops]
+      responses:
+        "200":
+          description: Shop profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shop"
+
+  /shops/qr-token:
+    post:
+      summary: Generate staff onboarding QR token (Owner only)
+      tags: [Shops]
+      responses:
+        "201":
+          description: QR token generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QRTokenResponse"
+
+  /shops/staff/revoke:
+    patch:
+      summary: Revoke staff access (Owner only)
+      tags: [Shops]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevokeStaffAccessRequest"
+      responses:
+        "200":
+          description: Staff revoked successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+
+  # -------------------------
+  # SKUS
+  # -------------------------
+  /skus:
+    get:
+      summary: List all available SKUs
+      tags: [SKUs]
+      responses:
+        "200":
+          description: SKU list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SKU"
+
+  # -------------------------
+  # INVENTORY
+  # -------------------------
+  /inventory/summary:
+    get:
+      summary: Get shop inventory summary
+      tags: [Inventory]
+      responses:
+        "200":
+          description: Inventory list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+
+  /inventory/restock:
+    post:
+      summary: Record restock (Ordered vs Received)
+      tags: [Inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestockRequest"
+      responses:
+        "201":
+          description: Restock recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestockResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /inventory/decant:
+    post:
+      summary: Convert cartons into units (1 carton = 12 bottles default)
+      tags: [Inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecantRequest"
+      responses:
+        "201":
+          description: Decant recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecantResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # -------------------------
+  # SALES
+  # -------------------------
+  /sales/sync:
+    post:
+      summary: Sync offline sales logs (bulk upload)
+      tags: [Sales]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SalesSyncRequest"
+      responses:
+        "200":
+          description: Sales sync completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesSyncResponse"
+        "400":
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # -------------------------
+  # AUDIT / AI
+  # -------------------------
+  /ai/trigger-count:
+    get:
+      summary: Check if staff should be prompted for a quick count
+      tags: [Audit]
+      parameters:
+        - name: device_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Trigger evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TriggerCountResponse"
+
+  /audit/verify:
+    post:
+      summary: Verify physical count and detect variance
+      tags: [Audit]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyCountRequest"
+      responses:
+        "200":
+          description: Verification result returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyCountResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # -------------------------
+  # ALERTS
+  # -------------------------
+  /alerts:
+    get:
+      summary: List alerts for current shop
+      tags: [Alerts]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "OPEN"
+      responses:
+        "200":
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Alert"
+
+  /alerts/{id}/resolve:
+    patch:
+      summary: Resolve an alert (Owner only)
+      tags: [Alerts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Alert resolved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolveAlertResponse"
+        "404":
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # -------------------------
+  # NOTIFICATIONS
+  # -------------------------
+  /notifications/send:
+    post:
+      summary: Send WhatsApp/SMS notification for an alert (Owner only)
+      tags: [Notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendNotificationRequest"
+      responses:
+        "201":
+          description: Notification sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/logs:
+    get:
+      summary: Get notification delivery logs
+      tags: [Notifications]
+      parameters:
+        - name: alert_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, SENT, FAILED, DELIVERED]
+      responses:
+        "200":
+          description: Notification logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationLog"
+
+  # -------------------------
+  # REPORTS
+  # -------------------------
+  /reports/deviation:
+    get:
+      summary: Fetch deviation and estimated loss report
+      tags: [Reports]
+      parameters:
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Deviation report list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeviationReportItem"
+
+  /reports/staff-performance:
+    get:
+      summary: Get staff performance metrics (Owner only)
+      tags: [Reports]
+      parameters:
+        - name: staff_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Staff performance report
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StaffPerformanceReport"
+
+  /reports/sales-velocity:
+    get:
+      summary: Get sales velocity metrics for AI anomaly detection
+      tags: [Reports]
+      parameters:
+        - name: sku_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: time_window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [HOURLY, DAILY, WEEKLY]
+            default: DAILY
+      responses:
+        "200":
+          description: Sales velocity report
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalesVelocityReport"
+
+  /reports/export:
+    get:
+      summary: Export deviation report as CSV (for Auditor/Accountant)
+      tags: [Reports]
+      parameters:
+        - name: start_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [csv, excel]
+            default: csv
+      responses:
+        "200":
+          description: CSV/Excel file download
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
