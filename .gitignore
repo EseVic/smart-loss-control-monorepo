@@ -1,0 +1,20 @@
+# env
+.env
+.env.*
+!.env.example
+
+# node
+**/node_modules/
+
+# logs
+**/*.log
+
+# builds
+**/dist/
+**/build/
+
+# misc
+.DS_Store
+.vscode/
+.idea/
+
