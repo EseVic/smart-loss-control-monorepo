@@ -17,7 +17,15 @@ git fetch fe
 git subtree pull --prefix=frontend fe "$FE_BRANCH" --squash
 
 echo "==> Push updated monorepo"
-git push origin main
+#git push origin main
+current_branch="$(git rev-parse --abbrev-ref HEAD)"
+
+if [ "$current_branch" = "main" ]; then
+  echo "❌ You are on main. main is protected. Switch to a branch and rerun."
+  exit 1
+fi
+
+git push -u origin "$current_branch"
 
 echo "✅ Done."
 
