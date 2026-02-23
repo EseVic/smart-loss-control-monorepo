@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smartloss-frontend
+  namespace: smartloss
+  labels:
+    app: smartloss-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: smartloss-frontend
+  template:
+    metadata:
+      labels:
+        app: smartloss-frontend
+    spec:
+      containers:
+        - name: smartloss-frontend   
+          image: veecode34/smartloss-frontend:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: VITE_BACKEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: smartloss-config
+                  key: VITE_BACKEND_URL
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: smartloss-frontend
+  namespace: smartloss  
+  labels:
+    app: smartloss-frontend
+spec:
+  selector:
+    app: smartloss-frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: LoadBalancer

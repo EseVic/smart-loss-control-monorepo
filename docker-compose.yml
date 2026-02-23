@@ -1,0 +1,24 @@
+services:
+  backend:
+    image: YOUR_DOCKERHUB_USER/smartloss-backend:latest
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+    restart: always
+
+  frontend:
+    image: YOUR_DOCKERHUB_USER/smartloss-frontend:latest
+    restart: always
+
+  caddy:
+    image: caddy:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: always
+    depends_on:
+      - frontend
+      - backend
