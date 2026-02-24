@@ -1,0 +1,18 @@
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: smartloss-config
+#   namespace: smartloss
+# data:
+#   FRONTEND_URL: "http://smartloss-frontend"
+#   VITE_BACKEND_URL: "http://smartloss-backend:5000"
+
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smartloss-config
+  namespace: smartloss  
+data:
+  FRONTEND_URL: "http://smartloss-frontend.smartloss.svc.cluster.loca
+  VITE_BACKEND_URL: "/api"  

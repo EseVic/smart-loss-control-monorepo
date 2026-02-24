@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Change these if your branches differ
 BE_BRANCH="main"
 FE_BRANCH="main"
 
 echo "==> Pull latest monorepo"
-git pull origin main
+git pull origin chore/add-sync-script
 
 echo "==> Sync backend subtree"
 git fetch be
@@ -17,7 +16,7 @@ git fetch fe
 git subtree pull --prefix=frontend fe "$FE_BRANCH" --squash
 
 echo "==> Push updated monorepo"
-#git push origin main
+#git push origin chore/add-sync-script
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
 
 if [ "$current_branch" = "main" ]; then

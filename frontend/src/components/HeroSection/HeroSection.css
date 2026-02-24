@@ -1,0 +1,57 @@
+.hero-section {
+    display: flex;
+    gap: 69px;
+
+     /* Fixed dimensions from design */
+    max-width: 1336px;
+    width: 100%;               /* ensure it doesn’t overflow screen */
+    height: 411px;
+
+    /* Positioning */
+    margin: 80px auto 0 auto;     /* top spacing 244px, horizontally centered */
+    opacity: 1;
+    transform: rotate(0deg); 
+}
+
+
+
+.hero-text {
+    display: flex;
+    flex-direction: column;
+    width: 600px;
+}
+
+.hero-text h1 {
+    font-size: 48px;
+    line-height: 70px;
+    font-weight: 700;
+    
+}
+
+.hero-text p {
+    font-size: 20px;
+    line-height: 1.6;
+    color: #4A5565;
+    max-width: 517px;
+}
+
+.hero-text .button { 
+    border: 2px solid var(--color-primary);
+}
+
+
+.hero-images {
+    display: flex;
+    align-items: center;
+    width: 676.3px;
+   
+}
+
+.hero-button{
+    display: flex;
+    width: 549px;      /* from Figma */
+    height: 63px;      /* from Figma */
+    gap: 63px;
+}
+
+
