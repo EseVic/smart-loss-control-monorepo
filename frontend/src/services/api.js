@@ -6,7 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 30000, // 10 seconds
+  timeout: 300000, // 10 seconds
   headers: {
     'Content-Type': 'application/json',
   },
@@ -16,9 +16,17 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('authToken')
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+
+    console.log('🚀 API Request:', {
+      method: config.method,
+      url: config.baseURL + config.url,
+      data: config.data,
+    })
+
     return config
   },
   (error) => {
@@ -30,13 +38,15 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const token = localStorage.getItem('authToken')
+    console.log("🔑 Current Token in localStorage:", token)
+
     if (error.response) {
-      // Server responded with error
+      console.log("📡 Request Headers:", error.config?.headers)
+
       switch (error.response.status) {
         case 401:
-          // Unauthorized - clear token and redirect to login
-          localStorage.removeItem('authToken')
-          window.location.href = '/login'
+          console.error('401 Unauthorized:', error.response.data)
           break
         case 403:
           console.error('Forbidden - insufficient permissions')
@@ -51,13 +61,14 @@ api.interceptors.response.use(
           console.error('API Error:', error.response.data)
       }
     } else if (error.request) {
-      // Request made but no response (offline)
       console.log('Network error - working offline')
     } else {
       console.error('Error:', error.message)
     }
+
     return Promise.reject(error)
   }
 )
+
 
 export default api
