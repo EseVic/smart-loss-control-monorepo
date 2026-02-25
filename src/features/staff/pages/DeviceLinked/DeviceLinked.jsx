@@ -52,17 +52,31 @@ function DeviceLinked() {
 
       const deviceId = generateDeviceId()
       const token = generateToken()
+      const staffId = 'staff_' + Date.now()
 
-      await db.staff.add({
-        id: 'staff_' + Date.now(),
+      const staffData = {
+        id: staffId,
         name: staffName.trim(),
         pin: pinString,
         device_id: deviceId,
         token: token,
         linked_at: new Date().toISOString()
-      })
+      }
 
-      navigate('/staff/sales')
+      await db.staff.add(staffData)
+
+      localStorage.setItem('deviceLinked', 'true')
+      localStorage.setItem('staffData', JSON.stringify({
+        id: staffId,
+        name: staffName.trim(),
+        deviceId: deviceId,
+        linkedAt: new Date().toISOString()
+      }))
+
+      console.log('✅ Device linked and logged in:', staffName.trim())
+
+      navigate('/staff/pin')
+      
     } catch (err) {
       console.error('Failed to link device:', err)
       setError('Failed to link device. Please try again.')
@@ -86,45 +100,47 @@ function DeviceLinked() {
           <h1 className={styles.title}>Device Linked!</h1>
           <p className={styles.subtitle}>Set up your staff credentials</p>
 
-          <div className={styles.inputSection}>
-            <label className={styles.label}>Your Name</label>
-            <input
-              type="text"
-              value={staffName}
-              onChange={(e) => setStaffName(e.target.value)}
-              placeholder="e.g., John Doe"
-              className={styles.nameInput}
-              required
-            />
-          </div>
-
-          <div className={styles.pinSection}>
-            <label className={styles.label}>Set Your 4-Digit PIN</label>
-            <div className={styles.pinBoxes}>
-              {pin.map((digit, index) => (
-                <input
-                  key={index}
-                  id={`pin-${index}`}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength="1"
-                  value={digit}
-                  onChange={(e) => handlePinChange(index, e.target.value)}
-                  className={styles.pinBox}
-                />
-              ))}
+          <form onSubmit={handleSubmit}>
+            <div className={styles.inputSection}>
+              <label className={styles.label}>Your Name</label>
+              <input
+                type="text"
+                value={staffName}
+                onChange={(e) => setStaffName(e.target.value)}
+                placeholder="e.g., John Doe"
+                className={styles.nameInput}
+                required
+              />
             </div>
-          </div>
 
-          {error && <p className={styles.error}>{error}</p>}
+            <div className={styles.pinSection}>
+              <label className={styles.label}>Set Your 4-Digit PIN</label>
+              <div className={styles.pinBoxes}>
+                {pin.map((digit, index) => (
+                  <input
+                    key={index}
+                    id={`pin-${index}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength="1"
+                    value={digit}
+                    onChange={(e) => handlePinChange(index, e.target.value)}
+                    className={styles.pinBox}
+                  />
+                ))}
+              </div>
+            </div>
 
-          <button
-            onClick={handleSubmit}
-            className={styles.generateButton}
-            disabled={loading}
-          >
-            {loading ? 'Setting Up...' : 'Complete Setup'}
-          </button>
+            {error && <p className={styles.error}>{error}</p>}
+
+            <button
+              type="submit"
+              className={styles.generateButton}
+              disabled={loading}
+            >
+              {loading ? 'Setting Up...' : 'Complete Setup & Start Working'}
+            </button>
+          </form>
         </div>
       </div>
     </div>
