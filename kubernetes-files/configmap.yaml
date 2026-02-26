@@ -14,5 +14,10 @@ metadata:
   name: smartloss-config
   namespace: smartloss  
 data:
-  FRONTEND_URL: "http://smartloss-frontend.smartloss.svc.cluster.loca
-  VITE_BACKEND_URL: "/api"  
+  FRONTEND_URL: "http://smartloss-frontend.smartloss.svc.cluster.local"
+  VITE_BACKEND_URL: "/api"
+  
+
+
+  
+
