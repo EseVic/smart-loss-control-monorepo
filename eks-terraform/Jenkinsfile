@@ -36,7 +36,7 @@ pipeline {
     stage('Terraform Init & Apply (EKS)') {
       when { expression { params.DESTROY_INFRA == false } }
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREDS']]) {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREEDS']]) {
           dir('eks-terraform') {
             sh '''
               terraform init
@@ -52,7 +52,7 @@ pipeline {
     stage('Configure AWS & EKS') {
       when { expression { params.DESTROY_INFRA == false } }
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREDS']]) {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREEDS']]) {
           sh '''
             aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
             kubectl get nodes
@@ -102,7 +102,7 @@ pipeline {
       when { expression { params.DESTROY_INFRA == false } }
       steps {
         withCredentials([
-          [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREDS'],
+          [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREEDS'],
           string(credentialsId: 'render-postgres-uri', variable: 'RENDER_POSTGRES_URI') // CHANGED
         ]) {
           dir('kubernetes-files') {
@@ -149,7 +149,7 @@ EOF
     stage('Terraform Destroy (EKS & Infra)') {
       when { expression { params.DESTROY_INFRA == true } }
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREDS']]) {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREEDS']]) {
           dir('eks-terraform') {
             sh '''
               terraform init
