@@ -15,7 +15,7 @@ pipeline {
     FRONTEND_IMAGE = 'smartloss-frontend'
     BACKEND_IMAGE  = 'smartloss-backend'
     EKS_CLUSTER_NAME = 'my-cluster'
-    K8S_NAMESPACE = 'smartloss'  // CHANGED
+    K8S_NAMESPACE = 'smartloss'
   }
 
   stages {
@@ -28,7 +28,7 @@ pipeline {
       steps {
         script {
           def sha = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-          env.TAG = "${sha}-${env.BUILD_NUMBER}"  // CHANGED
+          env.TAG = "${sha}-${env.BUILD_NUMBER}" 
         }
       }
     }
@@ -36,7 +36,7 @@ pipeline {
     stage('Terraform Init & Apply (EKS)') {
       when { expression { params.DESTROY_INFRA == false } }
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREDS']]) {
           dir('eks-terraform') {
             sh '''
               terraform init
@@ -52,7 +52,7 @@ pipeline {
     stage('Configure AWS & EKS') {
       when { expression { params.DESTROY_INFRA == false } }
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREDS']]) {
           sh '''
             aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
             kubectl get nodes
@@ -102,7 +102,7 @@ pipeline {
       when { expression { params.DESTROY_INFRA == false } }
       steps {
         withCredentials([
-          [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials'],
+          [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREDS'],
           string(credentialsId: 'render-postgres-uri', variable: 'RENDER_POSTGRES_URI') // CHANGED
         ]) {
           dir('kubernetes-files') {
@@ -149,7 +149,7 @@ EOF
     stage('Terraform Destroy (EKS & Infra)') {
       when { expression { params.DESTROY_INFRA == true } }
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREDS']]) {
           dir('eks-terraform') {
             sh '''
               terraform init
@@ -167,198 +167,3 @@ EOF
     success { echo '✅ Pipeline completed successfully!' }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// pipeline {
-//     agent any
-
-//     parameters {
-//         booleanParam(
-//             name: 'DESTROY_INFRA',
-//             defaultValue: false,
-//             description: '⚠️ Destroy ALL Terraform-managed infrastructure (EKS, VPC, etc.)'
-//         )
-//     }
-
-//     environment {
-//         AWS_REGION = 'us-east-1'
-//         DOCKERHUB_USERNAME = 'veecode34'
-//         FRONTEND_IMAGE = 'smartloss-frontend'
-//         BACKEND_IMAGE  = 'smartloss-backend'
-//         EKS_CLUSTER_NAME = 'my-cluster'
-//         TAG = "${env.BUILD_NUMBER}"  // dynamic image tag
-//     }
-
-//     stages {
-
-//         stage('Checkout Code') {
-//             steps {
-//                 checkout scm
-//             }
-//         }
-
-//         stage('Terraform Init & Apply (EKS)') {
-//             when { expression { params.DESTROY_INFRA == false } }
-//             steps {
-//                 withCredentials([
-//                     [$class: 'AmazonWebServicesCredentialsBinding',
-//                      credentialsId: 'aws-credentials']
-//                 ]) {
-//                     dir('eks-terraform') {
-//                         sh '''
-//                           terraform init
-//                           terraform validate
-//                           terraform apply -auto-approve
-//                         '''
-//                     }
-//                 }
-//             }
-//         }
-        
-//         stage('Configure AWS & EKS') {
-//             when { expression { params.DESTROY_INFRA == false } }
-//             steps {
-//                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
-//                     sh '''
-//                         export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-//                         export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-//                         export AWS_DEFAULT_REGION=$AWS_REGION
-
-//                         aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
-
-//                         kubectl cluster-info
-//                         kubectl get nodes
-//                     '''
-//                 }
-//             }
-//         }
-
-//         stage('Docker Login') {
-//             when { expression { params.DESTROY_INFRA == false } }
-//             steps {
-//                 withCredentials([
-//                     usernamePassword(
-//                         credentialsId: 'dockerhub-credentials',
-//                         usernameVariable: 'DOCKER_USER',
-//                         passwordVariable: 'DOCKER_PASS'
-//                     )
-//                 ]) {
-//                     sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
-//                 }
-//             }
-//         }
-
-//         stage('Build Docker Images') {
-//             when { expression { params.DESTROY_INFRA == false } }
-//             steps {
-//                 dir('backend') {
-//                     sh "docker build -t $DOCKERHUB_USERNAME/$BACKEND_IMAGE:$TAG ."
-//                 }
-//                 dir('frontend') {
-//                     sh "docker build -t $DOCKERHUB_USERNAME/$FRONTEND_IMAGE:$TAG ."
-//                 }
-//             }
-//         }
-
-//         stage('Push Docker Images') {
-//             when { expression { params.DESTROY_INFRA == false } }
-//             steps {
-//                 sh """
-//                   docker push $DOCKERHUB_USERNAME/$BACKEND_IMAGE:$TAG
-//                   docker push $DOCKERHUB_USERNAME/$FRONTEND_IMAGE:$TAG
-//                 """
-//             }
-//         }
-
-//         stage('Update YAMLs & Deploy to EKS') {
-//             when { expression { params.DESTROY_INFRA == false } }
-//             steps {
-//                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
-//                     dir('kubernetes-files') {
-//                         sh """
-//                           # Update kubeconfig for EKS access
-//                           export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-//                           export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-//                           export AWS_DEFAULT_REGION=$AWS_REGION
-//                           aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
-
-//                           # Update Docker image tags in YAML manifests
-//                           sed -i 's|image: .*smartloss-backend.*|image: $DOCKERHUB_USERNAME/$BACKEND_IMAGE:$TAG|g' backend-deployment.yaml
-//                           sed -i 's|image: .*smartloss-frontend.*|image: $DOCKERHUB_USERNAME/$FRONTEND_IMAGE:$TAG|g' frontend-deployment.yaml
-
-//                           # Apply all manifests
-//                           # Create namespace first
-//                           kubectl apply -f namespace.yaml
-
-//                           # Apply secrets and config
-//                           kubectl apply -f postgres-secret.yaml
-//                           kubectl apply -f ./configmap.yaml
-//                           kubectl apply -f ./secret.yaml
-
-//                           # Apply storage
-//                           kubectl apply -f postgres-pvc.yaml
-
-//                             # Deploy database
-//                           kubectl apply -f postgres-deployment.yaml
-//                           kubectl apply -f postgres-service.yaml
-
-//                             # Deploy backend and frontend
-//                           kubectl apply -f ./frontend.yaml
-//                           kubectl apply -f ./backend.yaml
-
-//                           # Wait for deployments
-//                           kubectl rollout status deployment/frontend --timeout=300s
-//                           kubectl rollout status deployment/backend --timeout=300s
-//                           kubectl rollout status deployment/postgres --timeout=300s
-//                         """
-//                     }
-//                 }
-//             }
-//         }
-
-//         /* ===============================
-//            DESTROY STAGE (MANUAL)
-//            =============================== */
-//         stage('Terraform Destroy (EKS & Infra)') {
-//             when { expression { params.DESTROY_INFRA == true } }
-//             steps {
-//                 withCredentials([
-//                     [$class: 'AmazonWebServicesCredentialsBinding',
-//                      credentialsId: 'aws-credentials']
-//                 ]) {
-//                     dir('eks-terraform') {
-//                         sh '''
-//                           terraform init
-//                           terraform destroy -auto-approve
-//                         '''
-//                     }
-//                 }
-//             }
-//         }
-//     }
-
-//     post {
-//         always {
-//             sh 'docker logout || true'
-//         }
-//         failure {
-//             echo '❌ Pipeline failed!'
-//         }
-//         success {
-//             echo '✅ Pipeline completed successfully!'
-//         }
-//     }
-// }
