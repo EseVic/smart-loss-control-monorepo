@@ -16,6 +16,7 @@ pipeline {
     BACKEND_IMAGE  = 'smartloss-backend'
     EKS_CLUSTER_NAME = 'my-cluster'
     K8S_NAMESPACE = 'smartloss'
+    TF_VAR_admin_principal_arn = 'arn:aws:iam::980805786514:user/EseVic'
   }
 
   stages {
@@ -103,7 +104,7 @@ pipeline {
       steps {
         withCredentials([
           [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREEDS'],
-          string(credentialsId: 'render-postgres-uri', variable: 'RENDER_POSTGRES_URI') // CHANGED
+          string(credentialsId: 'render-postgres-uri', variable: 'RENDER_POSTGRES_URI')
         ]) {
           dir('kubernetes-files') {
             sh """
