@@ -50,13 +50,13 @@ module "eks" {
 
   vpc_id                   = module.vpc.vpc_id
   subnet_ids               = module.vpc.private_subnets
-  control_plane_subnet_ids = module.vpc.private_subnets  # CHANGED: keep control plane private
+  control_plane_subnet_ids = module.vpc.private_subnets  
 
-  enable_irsa = true  # CHANGED
+  enable_irsa = true
 
   access_entries = {
     admin = {
-      principal_arn = var.admin_principal_arn  # CHANGED
+      principal_arn = var.admin_principal_arn 
 
       policy_associations = {
         admin = {
