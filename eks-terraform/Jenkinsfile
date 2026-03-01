@@ -9,6 +9,12 @@ pipeline {
     )
   }
 
+  options {
+    timestamps()
+    disableConcurrentBuilds()               // prevents two builds from fighting Terraform state
+    durabilityHint('MAX_SURVIVABILITY')     //  pipeline survives Jenkins hiccups/restarts better
+  }
+
   environment {
     AWS_REGION = 'us-east-1'
     DOCKERHUB_USERNAME = 'veecode34'
@@ -29,7 +35,7 @@ pipeline {
       steps {
         script {
           def sha = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-          env.TAG = "${sha}-${env.BUILD_NUMBER}" 
+          env.TAG = "${sha}-${env.BUILD_NUMBER}"
         }
       }
     }
@@ -40,10 +46,11 @@ pipeline {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREEDS']]) {
           dir('eks-terraform') {
             sh '''
-              terraform init
+              set -euo pipefail
+              terraform init -reconfigure   # CHANGED: forces correct backend/state (S3). Prevents destroy using "wrong" state.
               terraform fmt -check || true
               terraform validate
-              terraform apply -auto-approve
+              terraform apply -auto-approve -no-color | tee tf-apply.log   # CHANGED: stable logging
             '''
           }
         }
@@ -55,7 +62,8 @@ pipeline {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREEDS']]) {
           sh '''
-            aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+            set -euo pipefail
+            aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
             kubectl get nodes
           '''
         }
@@ -80,12 +88,8 @@ pipeline {
     stage('Build Docker Images') {
       when { expression { params.DESTROY_INFRA == false } }
       steps {
-        dir('backend') {
-          sh "docker build -t $DOCKERHUB_USERNAME/$BACKEND_IMAGE:$TAG ."
-        }
-        dir('frontend') {
-          sh "docker build -t $DOCKERHUB_USERNAME/$FRONTEND_IMAGE:$TAG ."
-        }
+        dir('backend')  { sh "docker build -t $DOCKERHUB_USERNAME/$BACKEND_IMAGE:$TAG ." }
+        dir('frontend') { sh "docker build -t $DOCKERHUB_USERNAME/$FRONTEND_IMAGE:$TAG ." }
       }
     }
 
@@ -108,19 +112,17 @@ pipeline {
         ]) {
           dir('kubernetes-files') {
             sh """
-              aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+              set -euo pipefail
+              aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
 
-              # Update image tags (CHANGED: correct filenames)
+              # Update image tags
               sed -i 's|image: .*smartloss-backend.*|image: $DOCKERHUB_USERNAME/$BACKEND_IMAGE:$TAG|g' backend-deploy.yaml
               sed -i 's|image: .*smartloss-frontend.*|image: $DOCKERHUB_USERNAME/$FRONTEND_IMAGE:$TAG|g' frontend-deploy.yaml
 
-              # Namespace first
               kubectl apply -f namespace.yaml
-
-              # ConfigMap
               kubectl apply -f configmap.yaml
 
-              # Render DB Secret injected securely (CHANGED: no secret in git)
+              # DB Secret injected securely
               cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Secret
@@ -132,13 +134,11 @@ stringData:
   POSTGRES_URI: "$RENDER_POSTGRES_URI"
 EOF
 
-              # Deploy apps
               kubectl apply -f backend-deploy.yaml
               kubectl apply -f frontend-deploy.yaml
 
-              # Wait for rollout (CHANGED: correct deployment names)
-              kubectl rollout status deployment/smartloss-backend -n $K8S_NAMESPACE --timeout=300s
-              kubectl rollout status deployment/smartloss-frontend -n $K8S_NAMESPACE --timeout=300s
+              kubectl rollout status deployment/smartloss-backend -n $K8S_NAMESPACE --timeout=600s   # CHANGED: longer timeout (EKS pulls can be slow)
+              kubectl rollout status deployment/smartloss-frontend -n $K8S_NAMESPACE --timeout=600s  # CHANGED: longer timeout
 
               kubectl get svc -n $K8S_NAMESPACE
             """
@@ -147,15 +147,50 @@ EOF
       }
     }
 
-    stage('Terraform Destroy (EKS & Infra)') {
+    // ======================
+    // DESTROY PATH (CLEAN)
+    // ======================
+
+    stage('Pre-Destroy: Delete Kubernetes Workloads (remove LBs/ENIs)') {
       when { expression { params.DESTROY_INFRA == true } }
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREEDS']]) {
-          dir('eks-terraform') {
-            sh '''
-              terraform init
-              terraform destroy -auto-approve
-            '''
+          sh '''
+            set +e
+
+            # CHANGED: delete k8s stuff FIRST so AWS LoadBalancers/ENIs created by Services are removed.
+            # Those often block subnet/IGW/VPC deletion (the "some resources could not be deleted" error).
+            aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME" 2>/dev/null
+
+            kubectl delete namespace "$K8S_NAMESPACE" --ignore-not-found=true
+            kubectl wait --for=delete ns/"$K8S_NAMESPACE" --timeout=900s || true
+          '''
+        }
+      }
+    }
+
+    stage('Terraform Destroy (EKS & Infra)') {
+      when { expression { params.DESTROY_INFRA == true } }
+      steps {
+        timeout(time: 60, unit: 'MINUTES') { // CHANGED: destroy can take a long time (EKS + VPC)
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREEDS']]) {
+            dir('eks-terraform') {
+              sh '''
+                set -euo pipefail
+                terraform init -reconfigure   # CHANGED: ensures destroy uses S3 state (same resources created)
+
+                # CHANGED: retry because AWS deletions are sometimes eventual-consistency flaky
+                for i in 1 2 3; do
+                  echo "===== terraform destroy attempt $i/3 ====="
+                  terraform destroy -auto-approve -no-color 2>&1 | tee tf-destroy.log && exit 0
+                  echo "Destroy attempt $i failed. Sleeping 60s then retry..."
+                  sleep 60
+                done
+
+                echo "Terraform destroy failed after 3 attempts."
+                exit 1
+              '''
+            }
           }
         }
       }
