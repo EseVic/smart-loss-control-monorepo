@@ -1,6 +1,6 @@
 services:
   backend:
-    image: YOUR_DOCKERHUB_USER/smartloss-backend:latest
+    image: veecoode34/smartloss-backend:latest
     environment:
       NODE_ENV: production
       PORT: 4000
@@ -9,7 +9,7 @@ services:
     restart: always
 
   frontend:
-    image: YOUR_DOCKERHUB_USER/smartloss-frontend:latest
+    image:veecode34/smartloss-frontend:latest
     restart: always
 
   caddy:
