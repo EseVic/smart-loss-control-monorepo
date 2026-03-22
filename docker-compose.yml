@@ -9,7 +9,7 @@ services:
     restart: always
 
   frontend:
-    image:veecode34/smartloss-frontend:latest
+    image: veecode34/smartloss-frontend:latest
     restart: always
 
   caddy:
