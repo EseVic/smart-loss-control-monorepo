@@ -14,29 +14,17 @@ The project is designed to support inventory tracking, reconciliation, and loss 
 - Terraform infrastructure for AWS EKS
 - CI/CD automation for build and deployment
 
-## My Role
-
-**Team Lead and DevOps Engineer**
-
-My responsibilities included:
-
-- Led coordination across the group project
-- Consolidated frontend and backend into a single monorepo using Git subtree
-- Designed and implemented the CI/CD pipeline
-- Supported containerization and deployment using Docker and Kubernetes
-- Worked with Terraform infrastructure for AWS EKS
-- Contributed to overall system architecture and delivery workflow
 
 ## Repository Structure
 smart-loss-control-monorepo/
-├── .github/workflows/
-├── backend/
-├── frontend/
-├── eks-terraform/
-├── kubernetes-files/
-├── docker-compose.yml
-├── sync.sh
-└── README.md
+- ├── .github/workflows/
+- ├── backend/
+- ├── frontend/
+- ├── eks-terraform/
+- ├── kubernetes-files/
+- ├── docker-compose.yml
+- ├── sync.sh
+- └── README.md
 
 
 ## Architecture
@@ -91,14 +79,14 @@ Clone the repository:
 git clone https://github.com/EseVic/smart-loss-control-monorepo
 
 ### Start backend:
-cd backend
-npm install
-npm run dev
+- cd backend
+- npm install
+- npm run dev
 
 ### Start frontend:
-cd frontend
-npm install
-npm run dev
+- cd frontend
+- npm install
+- npm run dev
 
 
 ## Docker
@@ -122,5 +110,4 @@ The project includes CI/CD automation for:
 
 ## Author
 
-Victoria Iria
-Lead, DevOps Engineer
+Victoria Iria (EseVic)
