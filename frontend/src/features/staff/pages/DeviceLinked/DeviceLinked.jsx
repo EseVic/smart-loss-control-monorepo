@@ -60,14 +60,13 @@ function DeviceLinked() {
 
       const deviceId = generateDeviceId()
 
-      // Make the actual API call to link the device
-      const response = await authAPI.linkStaff({
-        qr_token: qrToken,
-        staff_name: staffName.trim(),
-        phone: phone.trim(),
-        pin: pinString,
-        device_id: deviceId
-      })
+      const response = await authAPI.linkStaffDevice(
+        qrToken,
+        deviceId,
+        staffName.trim(),
+        phone.trim(),
+        pinString
+      )
 
       const staffId = response.staff?.id
 
@@ -81,7 +80,12 @@ function DeviceLinked() {
         linked_at: new Date().toISOString()
       }
 
-      await db.staff.add(staffData)
+  
+      try {
+        await db.staff.add(staffData)
+      } catch (dbErr) {
+        console.warn('IndexedDB save failed, continuing anyway:', dbErr)
+      }
 
       localStorage.setItem('deviceLinked', 'true')
       localStorage.setItem('authToken', response.token)
