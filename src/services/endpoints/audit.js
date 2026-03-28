@@ -31,7 +31,9 @@ export const auditAPI = {
     const response = await api.post('/audit/verify', {
       sku_id: data.skuId,
       physical_count: data.physicalCount,
-      counted_at: data.countedAt
+      expected_count: data.expectedCount,
+      counted_at: data.countedAt,
+      staff_id: data.staffId
     })
     return response.data
     // Response:

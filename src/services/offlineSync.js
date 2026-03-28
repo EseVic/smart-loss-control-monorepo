@@ -96,20 +96,22 @@ export const syncPendingSales = async () => {
     const response = await salesAPI.syncOfflineSales(pendingSales)
     
     if (response.success) {
-      // Mark all as synced
+      // Mark all as synced first — do this before reading summary so a
+      // non-standard summary shape from the backend never blocks the mark
       const saleIds = pendingSales.map(s => s.id)
       await db.pending_sales
         .where('id')
         .anyOf(saleIds)
         .modify({ synced: true })
-      
-      console.log(`✅ Successfully synced ${response.summary.accepted} sales`)
-      
+
+      const accepted = response.summary?.accepted ?? pendingSales.length
+      console.log(`✅ Successfully synced ${accepted} sales`)
+
       return {
         success: true,
-        synced: response.summary.accepted,
-        duplicates: response.summary.duplicates_ignored,
-        errors: response.summary.errors
+        synced: accepted,
+        duplicates: response.summary?.duplicates_ignored ?? 0,
+        errors: response.summary?.errors ?? []
       }
     }
     
@@ -134,31 +136,36 @@ export const syncPendingSales = async () => {
 }
 
 /**
- * Auto-sync when connection returns
+ * Auto-sync when connection returns.
+ * Returns a cleanup function — call it in useEffect's return.
  */
-export const setupAutoSync = (onSyncComplete) => {
-  // Sync when online
-  window.addEventListener('online', async () => {
-    console.log('🌐 Connection restored - syncing...')
+export const setupAutoSync = (onSyncComplete, onSyncStart) => {
+  const handleOnline = async () => {
+    const count = await getPendingSalesCount()
+    if (count === 0) return
+    if (onSyncStart) onSyncStart()
     const result = await syncPendingSales()
-    if (onSyncComplete) {
-      onSyncComplete(result)
-    }
-  })
-  
-  // Periodic sync every 30 seconds if online
-  setInterval(async () => {
+    if (onSyncComplete) onSyncComplete(result)
+  }
+
+  window.addEventListener('online', handleOnline)
+
+  const intervalId = setInterval(async () => {
     if (navigator.onLine) {
       const count = await getPendingSalesCount()
       if (count > 0) {
-        console.log(`🔄 Auto-sync: ${count} pending sales`)
+        if (onSyncStart) onSyncStart()
         const result = await syncPendingSales()
-        if (onSyncComplete) {
-          onSyncComplete(result)
-        }
+        if (onSyncComplete) onSyncComplete(result)
       }
     }
-  }, 30000) // 30 seconds
+  }, 30000)
+
+  // Return cleanup so callers can tear down listeners
+  return () => {
+    window.removeEventListener('online', handleOnline)
+    clearInterval(intervalId)
+  }
 }
 
 /**
