@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import logo from '../../assets/logo.png'
+import logo from '../../assets/image/logo.png'
 import styles from './navbar.module.css'
 
 function Navbar() {
