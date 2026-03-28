@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { authAPI } from '../../../../services'
+import useAuthStore from '../../../../store/useAuthStore'
 import db from '../../../../services/db'
 import styles from './DeviceLinked.module.css'
 
@@ -11,6 +12,7 @@ const generateDeviceId = () => {
 function DeviceLinked() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { loginStaff } = useAuthStore()
   const qrToken = location.state?.qrToken || ''
 
   const [loading, setLoading] = useState(false)
@@ -73,7 +75,6 @@ function DeviceLinked() {
       const staffData = {
         id: staffId,
         name: staffName.trim(),
-        pin: pinString,
         device_id: response.staff.device_id,
         shop_id: response.staff.shop_id,
         session_token: response.token,
@@ -87,9 +88,18 @@ function DeviceLinked() {
         console.warn('IndexedDB save failed, continuing anyway:', dbErr)
       }
 
+      loginStaff(
+        {
+          id: response.staff.id,
+          name: response.staff.full_name || staffName.trim(),
+          phone: response.staff.phone || phone.trim(),
+          shopId: response.staff.shop_id
+        },
+        response.token
+      )
+
       localStorage.setItem('deviceLinked', 'true')
       localStorage.setItem('authToken', response.token)
-      localStorage.setItem('userData', JSON.stringify(response.staff))
       localStorage.setItem('staffData', JSON.stringify({
         id: response.staff.id,
         name: response.staff.full_name,
@@ -98,11 +108,9 @@ function DeviceLinked() {
         linkedAt: new Date().toISOString()
       }))
 
-      console.log('✅ Device linked and logged in:', staffName.trim())
-      navigate('/staff/pin')
+      navigate('/staff/sales')
 
     } catch (err) {
-      console.error('❌ Failed to link device:', err)
       setError(err.response?.data?.message || 'Failed to link device. Please try again.')
     } finally {
       setLoading(false)
